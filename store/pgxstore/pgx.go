@@ -13,23 +13,15 @@ type PgxStore struct {
 }
 
 func New(pool *pgxpool.Pool) *PgxStore {
-	return NewWithCleanup(pool, 5*time.Minute)
+	return &PgxStore{pool: pool}
 }
 
-func NewWithCleanup(pool *pgxpool.Pool, interval time.Duration) *PgxStore {
-	p := &PgxStore{pool: pool}
-	if cleanupInterval > 0 {
-		go p.cleanup(interval)
-	}
-	return p
-}
-
-func (p *PgxStore) Delete(ctx context.Context, tokenHash string) (err error) {
+func (p *PgxStore) Delete(ctx context.Context, tokenHash []byte) (err error) {
 	_, err = p.pool.Exec(ctx, "DELETE FROM tokens WHERE token=$1", tokenHash)
 	return
 }
 
-func (p *PgxStore) Find(ctx context.Context, tokenHash string) (b []byte, found bool, err error) {
+func (p *PgxStore) Find(ctx context.Context, tokenHash []byte) (b []byte, found bool, err error) {
 	row := p.pool.QueryRow(ctx, "SELECT data, expiry FROM tokens WHERE token=$1", tokenHash)
 	var expiry time.Time
 	err = row.Scan(&b, &expiry)
@@ -47,16 +39,11 @@ func (p *PgxStore) Find(ctx context.Context, tokenHash string) (b []byte, found 
 	found = true
 }
 
-func (p *PgxStore) Commit(ctx context.Context, tokenHash string, b []byte, expiry time.Time) (err error) {
+func (p *PgxStore) Commit(ctx context.Context, tokenHash []byte, b []byte, expiry time.Time) (err error) {
 	_, err = p.pool.Exec(ctx, "INSERT INTO tokens (token, data, expiry) VALUES ($1, $2, $3)",
 	    tokenHash, b, expiry)
 }
 
-func (p *PgxStore) cleanup(interval time.Duration) {
-	for {
-		_, err := p.pool.Exec(context.Background(), "DELETE FROM tokens WHERE expiry < current_timestamp")
-		if err != nil {
-			log.Println(err)
-		}
-	}
+func (p *PgxStore) Cleanup(ctx context.Context) (err error) {
+	_, err = p.pool.Exec(ctx, "DELETE FROM tokens WHERE expiry < current_timestamp")
 }
