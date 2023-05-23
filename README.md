@@ -9,6 +9,7 @@ Create this table first:
 CREATE TABLE IF NOT EXISTS tokens (
 	token BYTEA NOT NULL,
 	data BYTEA NOT NULL,
-	expiry TIMESTAMPTZ NOT NULL
+	expiry TIMESTAMPTZ NOT NULL,
+	owner TEXT NOT NULL,
 );
 ```

@@ -1,8 +1,11 @@
 package tokenmanager
 
 import (
+	"errors"
 	"log"
+	"math/rand"
 	"time"
+	"fmt"
 )
 
 type TokenManager struct {
@@ -10,41 +13,66 @@ type TokenManager struct {
 
 	// A second token store for caching purposes, can be nil.
 	Cache Store
+
+	// Key used to store token data in router context
+	contextKey string
 }
 
+// Represents a token and its metadata
+type TokenInfo struct {
+	Token  string
+	Data   []byte
+	Owner  string
+	Expiry time.Time
+}
+
+// Token store methods
 type Store interface {
-	Delete(token []byte) (err error)
-	Find(token []byte) (b []byte, found bool, err error)
-	Commit(token []byte, b []byte, expiry time.Time) (err error)
+	Delete(token string) (err error)
+	Find(token string) (info *TokenInfo, err error)
+	FindAllByOwner(owner string) (info []TokenInfo, err error)
+	Commit(info *TokenInfo) (err error)
 	Cleanup() (err error)
 }
+
+var (
+	ErrExpired  = errors.New("Token is expired")
+	ErrNotFound = errors.New("Token not found")
+)
 
 func New(store, cache Store) *TokenManager {
 	return NewWithCleanupInterval(store, cache, 5*time.Minute)
 }
 
 func NewWithCleanupInterval(store Store, cache Store, interval time.Duration) *TokenManager {
-	t := &TokenManager{Store: store, Cache: cache}
+	t := &TokenManager{Store: store, Cache: cache, contextKey: generateContextKey()}
 	if interval > 0 {
 		go t.cleanup(interval)
 	}
 	return t
 }
 
-func (t *TokenManager) Find(token []byte) (b []byte, found bool, err error) {
+func (t *TokenManager) Find(token string) (*TokenInfo, error) {
 	if t.Cache != nil {
-		b, found, err = t.Cache.Find(token)
+		info, err := t.Cache.Find(token)
 		if err != nil {
-			return
-		}
-		if found {
-			return
+			return info, err
 		}
 	}
 	return t.Store.Find(token)
 }
 
-func (t *TokenManager) Delete(token []byte) error {
+func (t *TokenManager) FindAllByOwner(owner string) ([]TokenInfo, error) {
+	if t.Cache != nil {
+		info, err := t.Cache.FindAllByOwner(owner)
+		if err != nil {
+			return info, err
+		}
+	}
+	return t.Store.FindAllByOwner(owner)
+}
+
+func (t *TokenManager) Delete(token string) error {
 	if t.Cache != nil {
 		if err := t.Cache.Delete(token); err != nil {
 			return err
@@ -53,13 +81,13 @@ func (t *TokenManager) Delete(token []byte) error {
 	return t.Store.Delete(token)
 }
 
-func (t *TokenManager) Commit(token []byte, b []byte, expiry time.Time) error {
+func (t *TokenManager) Commit(info *TokenInfo) error {
 	if t.Cache != nil {
-		if err := t.Cache.Commit(token, b, expiry); err != nil {
+		if err := t.Cache.Commit(info); err != nil {
 			return err
 		}
 	}
-	return t.Store.Commit(token, b, expiry)
+	return t.Store.Commit(info)
 }
 
 func (t *TokenManager) cleanup(interval time.Duration) {
@@ -74,4 +102,8 @@ func (t *TokenManager) cleanup(interval time.Duration) {
 		}
 		time.Sleep(interval)
 	}
+}
+
+func generateContextKey() string {
+	return fmt.Sprintf("session.%d", rand.Int())
 }

@@ -1,12 +1,11 @@
 package tokenmanager
 
-import "net/http"
-
-type tokenData {
-	token string
-	expiry time.Time
-	data map[string]interface{}
-}
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strings"
+)
 
 func getBearerToken(r *http.Request) string {
 	bearer := r.Header.Get("Authorization")
@@ -16,20 +15,27 @@ func getBearerToken(r *http.Request) string {
 	return ""
 }
 
+// This middleware attempts to find the token in the store and
+// saves it into request context.
 func (t *TokenManager) TokenAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := getBearerToken(r)
 
-		data, found, err := t.Find(token)
+		data, err := t.Find(token)
 		if err != nil {
+			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrExpired) {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if !found {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
 
-		//r.Context() = context.WithValue(ctx, , sd)
-	}
+		ctx := t.SaveTokenToContext(r.Context(), data)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (t *TokenManager) SaveTokenToContext(ctx context.Context, data *TokenInfo) context.Context {
+	return context.WithValue(ctx, t.contextKey, data)
 }
