@@ -29,7 +29,7 @@ func (p *PgxStore) Find(token string) (*tm.TokenInfo, error) {
 		"SELECT data,owner,expiry FROM tokens WHERE token=$1", token)
 
 	info := &tm.TokenInfo{Token: token}
-	if err := row.Scan(info.Data, info.Owner, info.Expiry); err != nil {
+	if err := row.Scan(&info.Data, &info.Owner, &info.Expiry); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// No errors, this token doesn't exist
 			return nil, tm.ErrNotFound
@@ -63,7 +63,7 @@ func (p *PgxStore) FindAllByOwner(owner string) ([]tm.TokenInfo, error) {
 
 func (p *PgxStore) Commit(info *tm.TokenInfo) error {
 	_, err := p.pool.Exec(context.Background(),
-		"INSERT INTO tokens(token,data,owner,expiry)VALUES($1,$2,$4,$3)",
+		"INSERT INTO tokens(token,data,owner,expiry)VALUES($1,$2,$3,$4)",
 		info.Token, info.Data, info.Owner, info.Expiry)
 	return err
 }
