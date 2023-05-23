@@ -3,6 +3,8 @@ package tokenmanager
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 )
@@ -46,4 +48,8 @@ func (t *TokenManager) FromContext(ctx context.Context) *TokenInfo {
 		panic("tokenmanager: no token in context")
 	}
 	return c
+}
+
+func generateContextKey() string {
+	return fmt.Sprintf("session.%d", rand.Int())
 }

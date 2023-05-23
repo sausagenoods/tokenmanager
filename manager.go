@@ -1,11 +1,11 @@
 package tokenmanager
 
 import (
+	"crypto/rand"
+	"encoding/base32"
 	"errors"
 	"log"
-	"math/rand"
 	"time"
-	"fmt"
 )
 
 type TokenManager struct {
@@ -104,6 +104,12 @@ func (t *TokenManager) cleanup(interval time.Duration) {
 	}
 }
 
-func generateContextKey() string {
-	return fmt.Sprintf("session.%d", rand.Int())
+func GenerateToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base32.StdEncoding.WithPadding(base32.NoPadding).
+		EncodeToString(b), nil
 }
