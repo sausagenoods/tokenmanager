@@ -39,3 +39,11 @@ func (t *TokenManager) TokenAuth(next http.Handler) http.Handler {
 func (t *TokenManager) SaveTokenToContext(ctx context.Context, data *TokenInfo) context.Context {
 	return context.WithValue(ctx, t.contextKey, data)
 }
+
+func (t *TokenManager) FromContext(ctx context.Context) *TokenInfo {
+	c, ok := ctx.Value(t.contextKey).(*TokenInfo)
+	if !ok {
+		panic("tokenmanager: no token in context")
+	}
+	return c
+}
